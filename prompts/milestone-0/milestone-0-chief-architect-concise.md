@@ -8,10 +8,10 @@ Based on the output of milestone-0.md create a more concise version that only re
 # Dental PMS — M0 Architecture (Consolidated)
 
 ## Tech Stack
-Rust, Axum, Tokio, SQLx (compile-time checked), PostgreSQL 16, Leptos (WASM), Argon2id+JWT auth, S3-compatible storage behind `StorageBackend` trait, GitHub Actions CI/CD, Docker Compose.
+Rust, Axum, Tokio, Tonic (gRPC), SQLx (compile-time checked), PostgreSQL 16, Leptos (WASM), Argon2id+JWT auth, S3-compatible storage behind `StorageBackend` trait, GitHub Actions CI/CD, Docker Compose.
 
 ## Workspace Layout
-5 crates: `dental-server` (Axum routes+middleware), `dental-core` (domain models, zero framework deps), `dental-db` (all SQL, one module per PG schema), `dental-frontend` (Leptos WASM), `dental-common` (shared DTOs+validation).
+6 crates: `dental-server` (Axum routes+middleware, exposes gRPC via Tonic), `dental-gateway` (reverse-proxy service; translates gRPC responses → JSON for frontend consumers), `dental-core` (domain models, zero framework deps), `dental-db` (all SQL, one module per PG schema), `dental-frontend` (Leptos WASM), `dental-common` (shared DTOs+validation, includes `.proto` definitions).
 
 ## Postgres Schema-Per-Role Design
 
@@ -301,8 +301,11 @@ GRANT SELECT ON ALL TABLES IN SCHEMA billing TO dental_front_office;
 ## Offline Architecture
 Frontend writes through command queue (dental-common `Command` trait) → IndexedDB → sync engine. M0 defines types; M5 delivers sync UI. All writes use same path online/offline.
 
+## API Gateway (`dental-gateway`)
+Separate service (own Docker container) between TLS reverse proxy and `dental-server`. Accepts JSON/REST from frontend, translates to internal gRPC calls to `dental-server`, and converts gRPC responses back to JSON. Benefits: frontend never speaks gRPC directly; backend uses efficient Protobuf internally; gateway can aggregate multiple gRPC calls into a single JSON response; clean boundary for rate limiting, request shaping, and protocol evolution.
+
 ## Microservice Extraction Path
-Each schema module = future service boundary. To extract: `ALTER ROLE dental_X LOGIN`, pull schema/*.rs + routes + models into standalone service, replace cross-schema SELECTs with API calls. Cross-schema grants document exactly which inter-service calls are needed.
+Each schema module = future service boundary. To extract: `ALTER ROLE dental_X LOGIN`, pull schema/*.rs + routes + models into standalone service, replace cross-schema SELECTs with gRPC calls via the gateway. Cross-schema grants document exactly which inter-service calls are needed. The gateway already provides the JSON↔gRPC translation layer needed for extracted services.
 
 ## Architecture Diagram
 
@@ -311,12 +314,16 @@ graph TB
     subgraph "Client — Leptos WASM"
         UI[UI Layer] --> CQ[Command Queue] --> IDB[(IndexedDB)] --> SYNC[Sync Engine]
     end
-    SYNC -- "HTTPS" --> LB[Reverse Proxy/TLS]
-    LB --> AXUM[Axum Router]
+    SYNC -- "HTTPS/JSON" --> LB[Reverse Proxy/TLS]
+    LB -- "JSON" --> GW[dental-gateway]
+    subgraph "API Gateway — dental-gateway"
+        GW -- "gRPC" --> AXUM[Axum+Tonic Server]
+        GW -. "gRPC→JSON translation" .-> GW
+    end
     subgraph "Middleware"
         AXUM --> MW_AUTH[Auth JWT+Role] --> MW_DBROLE[SET LOCAL ROLE] --> MW_AUDIT[Audit PHI Log]
     end
-    subgraph "Routes"
+    subgraph "Routes — gRPC services"
         MW_AUDIT --> R_AUTH[/auth] & R_FO[/patients /appointments] & R_CLIN[/charting] & R_TX[/treatment] & R_BILL[/billing] & R_IMG[/imaging]
     end
     subgraph "dental-core"
@@ -345,6 +352,7 @@ graph TB
     PG_FO & PG_CL & PG_TX & PG_BI -. INSERT .-> PG_AU
     PG_SH -. SELECT .-> PG_FO & PG_CL & PG_TX & PG_BI
     S_FO --> S3[(S3 Object Storage)]
+    style GW fill:#E8A317,color:#fff
     style AXUM fill:#D94A4A,color:#fff
     style PG_A fill:#336791,color:#fff
     style PG_SH fill:#336791,color:#fff
