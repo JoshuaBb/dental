@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/dental-common",
+    "crates/dental-core",
+    "crates/dental-db",
+    "crates/dental-server",
+    "crates/dental-gateway",
+]
+# dental-frontend excluded: requires wasm32 target setup
+exclude = ["crates/dental-frontend"]

@@ -1,0 +1,7 @@
+[package]
+name = "dental-core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dental-common = { path = "../dental-common" }
