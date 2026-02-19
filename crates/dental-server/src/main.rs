@@ -1,27 +1,49 @@
-use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
-use serde_json::{json, Value};
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;
+use tonic::{transport::Server, Request, Response, Status};
 
-async fn health() -> Json<Value> {
-    Json(json!({ "status": "healthy" }))
+pub mod dental {
+    tonic::include_proto!("dental");
 }
 
-async fn ready(State(pool): State<PgPool>) -> Result<Json<Value>, StatusCode> {
-    sqlx::query("SELECT 1")
-        .execute(&pool)
-        .await
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    Ok(Json(json!({ "status": "ready" })))
+use dental::dental_service_server::{DentalService, DentalServiceServer};
+use dental::{HealthRequest, HealthResponse, ReadyRequest, ReadyResponse};
+
+struct DentalServiceImpl {
+    pool: PgPool,
+}
+
+#[tonic::async_trait]
+impl DentalService for DentalServiceImpl {
+    async fn check_health(
+        &self,
+        _request: Request<HealthRequest>,
+    ) -> Result<Response<HealthResponse>, Status> {
+        Ok(Response::new(HealthResponse {
+            status: "healthy".to_string(),
+        }))
+    }
+
+    async fn check_ready(
+        &self,
+        _request: Request<ReadyRequest>,
+    ) -> Result<Response<ReadyResponse>, Status> {
+        sqlx::query("SELECT 1")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| Status::unavailable(format!("database not ready: {e}")))?;
+        Ok(Response::new(ReadyResponse {
+            status: "ready".to_string(),
+        }))
+    }
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
     let _ = dotenvy::dotenv();
 
-    let database_url =
-        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -31,14 +53,13 @@ async fn main() {
 
     tracing::info!("Connected to database");
 
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/ready", get(ready))
-        .with_state(pool);
-
-    let addr = "0.0.0.0:3000";
+    let addr = "0.0.0.0:50051".parse()?;
     tracing::info!("dental-server listening on {addr}");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    Server::builder()
+        .add_service(DentalServiceServer::new(DentalServiceImpl { pool }))
+        .serve(addr)
+        .await?;
+
+    Ok(())
 }

@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package dental;
+
+service DentalService {
+  rpc CheckHealth (HealthRequest) returns (HealthResponse);
+  rpc CheckReady  (ReadyRequest)  returns (ReadyResponse);
+}
+
+message HealthRequest {}
+message HealthResponse { string status = 1; }
+
+message ReadyRequest {}
+message ReadyResponse  { string status = 1; }
