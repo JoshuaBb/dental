@@ -1,35 +1,20 @@
-use axum::{extract::State, http::StatusCode, routing::get, Json, Router};
-use serde_json::{json, Value};
+use axum::Router;
 use tonic::transport::Channel;
+
+mod routes;
 
 pub mod dental {
     tonic::include_proto!("dental");
 }
 
 use dental::dental_service_client::DentalServiceClient;
-use dental::{HealthRequest, ReadyRequest};
+
+pub const ORIGIN: &str = "dental";
+const API_VERSION: &str = "v1";
 
 #[derive(Clone)]
-struct AppState {
-    grpc: DentalServiceClient<Channel>,
-}
-
-async fn health(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let mut client = state.grpc.clone();
-    let resp = client
-        .check_health(HealthRequest {})
-        .await
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    Ok(Json(json!({ "status": resp.into_inner().status })))
-}
-
-async fn ready(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    let mut client = state.grpc.clone();
-    let resp = client
-        .check_ready(ReadyRequest {})
-        .await
-        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
-    Ok(Json(json!({ "status": resp.into_inner().status })))
+pub struct AppState {
+    pub grpc: DentalServiceClient<Channel>,
 }
 
 #[tokio::main]
@@ -44,12 +29,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let channel = Channel::from_shared(server_url)?.connect_lazy();
     let grpc = DentalServiceClient::new(channel);
 
+    // TODO: BUG here
     let app = Router::new()
-        .route("/health", get(health))
-        .route("/ready", get(ready))
+        .nest(&format!("/{API_VERSION}"), routes::router())
         .with_state(AppState { grpc });
 
-    let addr = "0.0.0.0:8080";
+    let addr = "0.0.0:8080";
     tracing::info!("dental-gateway listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
