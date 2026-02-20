@@ -17,8 +17,15 @@ struct DentalServiceImpl {
 impl DentalService for DentalServiceImpl {
     async fn check_health(
         &self,
-        _request: Request<HealthRequest>,
+        request: Request<HealthRequest>,
     ) -> Result<Response<HealthResponse>, Status> {
+        let request_id = request
+            .get_ref()
+            .context
+            .as_ref()
+            .map(|c| c.request_id.as_str())
+            .unwrap_or("unknown");
+        tracing::info!(request_id, "check_health");
         Ok(Response::new(HealthResponse {
             status: "healthy".to_string(),
         }))
@@ -26,8 +33,15 @@ impl DentalService for DentalServiceImpl {
 
     async fn check_ready(
         &self,
-        _request: Request<ReadyRequest>,
+        request: Request<ReadyRequest>,
     ) -> Result<Response<ReadyResponse>, Status> {
+        let request_id = request
+            .get_ref()
+            .context
+            .as_ref()
+            .map(|c| c.request_id.as_str())
+            .unwrap_or("unknown");
+        tracing::info!(request_id, "check_ready");
         sqlx::query("SELECT 1")
             .execute(&self.pool)
             .await

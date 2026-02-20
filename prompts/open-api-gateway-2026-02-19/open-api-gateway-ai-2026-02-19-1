@@ -1,0 +1,16 @@
+# Input
+Implement the Open-API instructions for dental-gateway
+
+# Output
+Branch: open-api-gateway-ai-1
+
+## Changes made:
+1. Added `utoipa = { version = "4", features = ["axum_extras"] }` to dental-gateway/Cargo.toml
+2. Added `utoipa = { version = "4" }` to dental-common/Cargo.toml
+3. Converted gRPC passthrough responses to typed OpenAPI response structs (HealthApiResponse, ReadyApiResponse, StatusApiResponse)
+4. Annotated all three route handlers with `#[utoipa::path]` macros
+5. Added `#[derive(OpenApi)] ApiDoc` struct in main.rs referencing all paths and schemas
+6. Added GET /swagger-ui endpoint serving Swagger UI (CDN-based, no axum version conflict)
+7. Added GET /api-docs/openapi.json endpoint serving the raw OpenAPI JSON spec
+8. Fixed address typo 0.0.0:8080 -> 0.0.0.0:8080 in main.rs
+9. Removed unused PassThrough struct (replaced by typed responses)

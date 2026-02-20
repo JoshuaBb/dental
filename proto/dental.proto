@@ -7,8 +7,17 @@ service DentalService {
   rpc CheckReady  (ReadyRequest)  returns (ReadyResponse);
 }
 
-message HealthRequest {}
+// Carries per-request tracing metadata; embed in every request message.
+message RequestContext {
+  string request_id = 1;
+}
+
+message HealthRequest {
+  RequestContext context = 1;
+}
 message HealthResponse { string status = 1; }
 
-message ReadyRequest {}
+message ReadyRequest {
+  RequestContext context = 1;
+}
 message ReadyResponse  { string status = 1; }

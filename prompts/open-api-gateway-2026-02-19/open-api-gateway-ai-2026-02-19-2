@@ -1,0 +1,16 @@
+# Input
+In dental-gateway I cannot open swagger
+
+# Root Cause
+The hand-rolled swagger HTML in `main.rs` referenced `SwaggerUIBundle.SwaggerUIStandalonePreset`
+which does not exist on the bundle object (it would be `undefined` at runtime), causing the
+Swagger UI to fail to initialize.
+
+# Fix
+- Upgraded `utoipa` from v4 → v5 in `dental-gateway/Cargo.toml` and `dental-common/Cargo.toml`
+- Added `utoipa-swagger-ui = { version = "9", features = ["axum"] }` to `dental-gateway/Cargo.toml`
+- Replaced the hand-rolled HTML handler with `SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi())`
+- Removed the now-unused `swagger_ui()` async fn and its route registration
+
+# Branch
+open-api-gateway-ai-2

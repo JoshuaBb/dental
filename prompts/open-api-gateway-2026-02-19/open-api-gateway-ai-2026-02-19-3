@@ -1,0 +1,21 @@
+# Input
+Revert routes.js to add the utopia information
+
+# Root Cause
+`routes.rs` was missing the utoipa response schema structs (`HealthApiResponse`, `ReadyApiResponse`,
+`StatusApiResponse`) and `#[utoipa::path]` annotations that `main.rs` already referenced in its
+`#[derive(OpenApi)]` block. Handler functions were also private (`async fn`) instead of `pub async fn`.
+
+Additionally, `HealthRequest` and `ReadyRequest` were being constructed without their required
+`context` field (added to the proto after `routes.rs` was last edited).
+
+# Fix
+- Added `HealthApiResponse`, `ReadyApiResponse`, `StatusApiResponse` structs with `#[derive(Serialize, ToSchema)]`
+- Added `#[utoipa::path]` annotations to `health`, `ready`, and `status` handler functions
+- Made `health`, `ready`, and `status` handler functions `pub`
+- Changed `status` to return `Json<StatusApiResponse>` (typed) instead of `Json<Value>`
+- Fixed pre-existing compile error: `HealthRequest {}` → `HealthRequest { context: None }` (x2)
+- Fixed pre-existing compile error: `ReadyRequest {}` → `ReadyRequest { context: None }` (x2)
+
+# Branch
+open-api-gateway-ai-4
