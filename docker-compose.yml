@@ -37,6 +37,7 @@ services:
       - "8080:8080"
     environment:
       DENTAL_SERVER_URL: ${DENTAL_SERVER_URL}
+      RUST_LOG: info
     depends_on:
       - dental-server
 
